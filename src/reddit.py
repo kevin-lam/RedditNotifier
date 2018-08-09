@@ -55,6 +55,22 @@ class RedditQuery:
     return self.subreddit
 
 
+class RedditQueryGroup:
+  def __init__(self):
+    self.queries = {}
+
+  def put(self, key, value):
+    self.queries[key] = value
+
+  def get(self, key):
+    return self.queries.get(key)
+
+  def remove(self, key):
+    del self.queries[key]
+
+  def size(self):
+    return len(self.queries)
+
 class RedditQueryRunner:
   def __init__(self, id, agent):
     self.id = id

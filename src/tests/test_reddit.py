@@ -5,7 +5,7 @@ from mock import patch
 from praw.exceptions import APIException, ClientException
 sys.path.append('..')
 
-from reddit import Reddit, RedditQuery, RedditQueryRunner
+from reddit import Reddit, RedditQuery, RedditQueryGroup, RedditQueryRunner
 
 @pytest.fixture(scope='module')
 def reddit():
@@ -30,6 +30,30 @@ class TestRedditQuery():
     query_with_before_added = 'test&before=testid'
     query = RedditQuery(keyword=keyword, subreddit=subreddit, before=before_post)
     assert query.to_string() == query_with_before_added
+
+
+class TestRedditQueryGroup():
+  @pytest.fixture(autouse=True)
+  def create_query_group(self):
+    self.query_group = RedditQueryGroup()
+    keyword = 'test'
+    subreddit= 'Askreddit'
+    query = RedditQuery(keyword, subreddit)
+    self.query_group.put(keyword + subreddit, query)
+
+  def test_put(self):
+    keyword = 'test2'
+    subreddit= 'Askreddit2'
+    query = RedditQuery(keyword, subreddit)
+    self.query_group.put(keyword + subreddit, query)
+    assert self.query_group.size() == 2
+
+  def test_get(self):
+    assert self.query_group.get('testAskreddit') != None
+
+  def test_remove(self):
+    self.query_group.remove('testAskreddit')
+    assert self.query_group.size() == 0
 
 
 class TestRedditQueryRunner():
