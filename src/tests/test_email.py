@@ -3,7 +3,7 @@ import sys
 sys.path.append('..')
 
 from mock import Mock
-from electronicmail import EmailSender
+from electronicmail import EmailSender, EmailValidator
 
 class TestEmailSender:
   def test_send(self):
@@ -15,3 +15,7 @@ class TestEmailSender:
 
     email_client_mock.sendmail.assert_called()
 
+class TestEmailValidator:
+  def test_validate(self):
+    validator = EmailValidator()
+    assert validator.validate('21test.213_!^%#&^(*blakblak@!#.com') == True
