@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>588</width>
-    <height>127</height>
+    <height>135</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -52,7 +52,7 @@
         <number>0</number>
        </property>
        <item>
-        <widget class="QLabel" name="current_notification_count_label">
+        <widget class="QLabel" name="total_post_count_label">
          <property name="font">
           <font>
            <pointsize>10</pointsize>
@@ -70,7 +70,7 @@
         </widget>
        </item>
        <item>
-        <widget class="QLabel" name="current_notification_count_icon">
+        <widget class="QLabel" name="total_post_count_icon">
          <property name="styleSheet">
           <string notr="true"/>
          </property>
@@ -90,7 +90,7 @@
     </layout>
    </item>
    <item>
-    <layout class="QHBoxLayout" name="start_pause_layout" stretch="0">
+    <layout class="QHBoxLayout" name="start_resume_layout" stretch="0,0">
      <item>
       <widget class="QPushButton" name="pause_button">
        <property name="styleSheet">
@@ -102,6 +102,26 @@
        <property name="icon">
         <iconset>
          <normaloff>../img/pause.svg</normaloff>../img/pause.svg</iconset>
+       </property>
+       <property name="iconSize">
+        <size>
+         <width>24</width>
+         <height>24</height>
+        </size>
+       </property>
+       <property name="flat">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="resume_button">
+       <property name="text">
+        <string/>
+       </property>
+       <property name="icon">
+        <iconset>
+         <normaloff>../img/start.svg</normaloff>../img/start.svg</iconset>
        </property>
        <property name="iconSize">
         <size>

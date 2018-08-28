@@ -1,7 +1,8 @@
 from exception import SendMailFailureException
-from smtplib import SMTPRecipientsRefused, SMTPHeloError, SMTPSenderRefused, SMTPDataError
+from smtplib import SMTP, SMTPRecipientsRefused, SMTPHeloError, SMTPSenderRefused, SMTPDataError
 
 class EmailSender:
+
   def __init__(self, client):
     self.client = client
 
@@ -18,7 +19,25 @@ class EmailSender:
       raise SendFailureException(SendFailureException.SERVER_UNEXPECTED_ERROR, de)
 
 
+class EmailClient:
+
+  def __init__(self, host, port, email, password):
+    self.host = host
+    self.port = port
+    self.email = email
+    self.password = password
+
+  def connect(self):
+    self.client = SMTP(self.host, self.port.encode('ascii'))
+    #client.connect(self.host, self.port)
+    self.client.ehlo()
+    self.client.starttls()
+    self.client.ehlo()
+    self.client.login(self.email, self.password)
+
+
 class Email:
+
   def __init__(self, sender, receiver, message):
     self.sender = sender
     self.receiver = receiver

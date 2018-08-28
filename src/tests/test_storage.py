@@ -1,59 +1,60 @@
 import pytest
 import sys
-import random
-import string
+import mock
 
 sys.path.append('..')
 
-from storage import QueryStorageRetriever, QueryStorageSaver
-from reddit import RedditQuery, RedditQueryGroup
-
-TEST_FILE = 'storage_test_file.pckl'
-
-@pytest.fixture(scope='module')
-def retriever():
-  return QueryStorageRetriever(TEST_FILE)
-
-@pytest.fixture(autouse=True)
-def create_query_group_with_five_queries():
-  query_group = RedditQueryGroup()
-
-  for i in range(5):
-    keyword = random_string_len(5)
-    subreddit = random_string_len(8)
-    key = keyword + subreddit
-    query_group.put(key, create_query(keyword, subreddit))
-
-  saver = QueryStorageSaver(TEST_FILE)
-  saver.save(query_group)
-
-def random_string_len(n):
-  return ''.join(random.choice(string.lowercase) for x in range(n))
-
-def create_query(keyword, subreddit):
-  return RedditQuery(keyword, subreddit)
+from pickle import PickleError
+from storage import PickleStorageRetriever, PickleStorageSaver, FileStorage
+class Listing:
+  list = []
+  def add(self, data):
+    self.list.append(data)
 
 
-class TestQueryStorageRetriever:
-  def test_get_all(self, retriever):
-    queries = retriever.get_all()
-    assert queries != None
+class TestFileStorage:
 
+  @pytest.fixture(scope="function")
+  def mock_storage(self):
+    retriever = mock.create_autospec(PickleStorageRetriever)
+    saver = mock.create_autospec(PickleStorageSaver)
+    return FileStorage(retriever, saver)
 
-class TestQueryStorageSaver:
-  @pytest.fixture(autouse=True)
-  def create_saver(self):
-    self.saver = QueryStorageSaver(TEST_FILE)
+  def test_read_all_success(self, mock_storage):
+    mock_storage.retriever.get.return_value = 'success'
+    assert mock_storage.read_all(None) is 'success'
 
-  def test_save(self, retriever):
-    original_size = 5
+  def test_read_all_could_not_read(self, mock_storage):
+    mock_storage.retriever.get.side_effect = PickleError()
+    assert mock_storage.read_all(None) is None
 
-    query_group = RedditQueryGroup()
-    keyword = random_string_len(5)
-    subreddit = random_string_len(8)
-    key = keyword + subreddit
-    query_group.put(key, create_query(keyword, subreddit))
+  def test_read_by_key(self, mock_storage):
+    mock_listing = mock.Mock()
+    mock_listing.get.return_value = 'success'
+    mock_storage.retriever.get.return_value = mock_listing
+    assert mock_storage.read_by_key('test') is 'success'
 
-    self.saver.save(query_group)
-    query_group = retriever.get_all()
-    assert query_group.size() != original_size
+  def test_read_by_key_key_doesnt_exist(self, mock_storage):
+    mock_storage.retriever.get.side_effect = PickleError()
+    assert mock_storage.read_by_key('test') is None
+
+  def test_overwrite_sucess(self, mock_storage):
+    mock_storage.overwrite('test')
+    mock_storage.saver.put.assert_called_once()
+
+  def test_overwrite_pickle_error(self, mock_storage):
+    mock_storage.saver.put.side_effect = PickleError()
+    mock_logger = mock.Mock()
+    mock_storage.log = mock_logger
+    mock_storage.overwrite('test')
+    mock_logger.exception.assert_called_once()
+
+  def test_append(self, mock_storage):
+    mock_storage.retriever.get.return_value = Listing()
+    mock_storage.append('test', None)
+
+  def test_delete(self, mock_storage):
+    mock_storage.delete('key', Listing())
+
+  def test_update(self, mock_storage):
+    mock_storage.update('key', 'one', Listing())

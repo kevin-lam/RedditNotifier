@@ -58,7 +58,7 @@
          <number>0</number>
         </property>
         <item>
-         <widget class="QPushButton" name="edit_email_button">
+         <widget class="QPushButton" name="user_dialog_button">
           <property name="styleSheet">
            <string notr="true">QPushButton {
 	padding-left: 0px;
@@ -93,7 +93,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="new_notification_button">
+         <widget class="QPushButton" name="query_dialog_button">
           <property name="styleSheet">
            <string notr="true">QPushButton {
 	padding-left: 0px;

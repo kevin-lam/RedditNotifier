@@ -16,7 +16,7 @@ class TestTaskScheduler:
     self.task = Task(test_func)
     self.scheduledTask = self.scheduler.schedule_task_in_interval(self.task, 1, Time.SEC)
 
-  def test_schedule_task_in_interval(self):
+  def test_schedule_task(self):
     assert self.scheduledTask != None
 
   def test_cancel_scheduled_task(self):

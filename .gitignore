@@ -1,9 +1,13 @@
 # Compiled files
 __pycache__/
 *.py[cod]
+*.autosave
 
 # Pytest
 .pytest_cache/
 
 # Pickle
 .pckl
+
+# Environment
+.env

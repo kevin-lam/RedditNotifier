@@ -1,5 +1,12 @@
 class UiFile:
   MAIN_WINDOW = 'ui/main.ui'
-  EDIT_EMAIL_DIALOG = 'ui/edit_email_dialog.ui'
-  CREATE_NOTIFICATION_DIALOG = 'ui/create_notification_dialog.ui'
+  USER_DIALOG = 'ui/user_dialog.ui'
+  QUERY_DIALOG = 'ui/query_dialog.ui'
+  QUERYLISTING_ENTRY = 'ui/querylisting_entry.ui'
 
+class StorageFile:
+  QUERYLISTING = 'queries.pckl'
+  USER = 'user.pckl'
+
+class ConfigFile:
+  LOGGING = 'log.conf'

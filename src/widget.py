@@ -3,17 +3,7 @@ from PyQt5 import uic
 
 class Widget(QWidget):
 
-  def __init__(self):
+  def __init__(self, ui_file, base_instance):
     super(Widget, self).__init__()
-
-  def setup(self, ui_file, base_class=None):
-    base_class = self if base_class is None else base_class
-    self.display(ui_file, base_class)
-    self.init()
-
-  def display(self, ui_file, base_class):
-    uic.loadUi(ui_file, base_class)
-    self.show_ui(base_class)
-
-  def show_ui(self, instance):
-    instance.show()
+    uic.loadUi(ui_file, self)
+    self.setup_signals()

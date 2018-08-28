@@ -12,6 +12,7 @@ class Reddit:
       return self.query_runner.search_query(query)
     except RedditAccessException as re:
       self.log.exception(str(re))
+      return []
 
   def subreddit_exists(self, subreddit):
     return self.query_runner.subreddit_exists(subreddit)
