@@ -1,28 +1,115 @@
 ﻿import praw
+import logging
 from prawcore import NotFound
 from scheduler import TaskState
+from exception import RedditAccessException
+from prawcore.exceptions import (
+  InvalidInvocation, OAuthException, BadJSON, BadRequest, Conflict, Forbidden,
+  InsufficientScope, InvalidToken, NotFound, Redirect, ServerError, SpecialError,
+  TooLarge, UnavailableForLegalReasons
+)
+from praw.exceptions import ClientException, APIException
+from date import DateTime
 
 class Reddit:
 
-  def __init__(self, id, agent):
-    self.query_runner = RedditQueryRunner(id, agent)
+  def __init__(self, client):
+    self.client = client
+    self.log = logging.getLogger('reddit')
 
   def query(self, query):
     try:
-      return self.query_runner.search_query(query)
+      return self._search_subreddit(query.subreddit, query)
     except RedditAccessException as re:
-      self.log.exception(str(re))
+      self.log.exception(re.message)
+      return []
+
+  def _search_subreddit(self, subreddit, query):
+    result_generator = self._get_subreddit_generator(subreddit, query)
+    search_result = []
+    for submission in result_generator:
+      post = self._create_post_from_submission(submission)
+      search_result.append(post)
+    return search_result
+
+  def _create_post_from_submission(self, submission):
+    try:
+      return RedditPost(
+        submission.title,
+        submission.created_utc,
+        submission.num_comments,
+        submission.url,
+        submission.name
+      )
+    except ClientException:
+      raise RedditAccessException(RedditAccessException.GENERAL_CLIENT)
+    except APIException:
+      raise RedditAccessException(RedditAccessException.GENERAL_SERVER)
+    except InvalidInvocation:
+      raise RedditAccessException(RedditAccessException.CODE_FAILURE)
+    except OAuthException:
+      raise RedditAccessException(RedditAccessException.OAUTH_ERROR)
+    except BadJSON:
+      raise RedditAccessException(RedditAccessException.INVALID_JSON)
+    except BadRequest:
+      raise RedditAccessException(RedditAccessException.INVALID_PARAM)
+    except Conflict:
+      raise RedditAccessException(RedditAccessException.CONFLICT_OF_RESOURCES)
+    except Forbidden:
+      raise RedditAccessException(RedditAccessException.AUTHENTICATION_FAILURE)
+    except InsufficientScope:
+      raise RedditAccessException(RedditAccessException.SCOPE_FAILURE)
+    except InvalidToken:
+      raise RedditAccessException(RedditAccessException.INVALID_TOKEN)
+    except NotFound:
+      raise RedditAccessException(RedditAccessException.INVALID_URL)
+    except Redirect:
+      raise RedditAccessException(RedditAccessException.REDIRECT)
+    except ServerError:
+      raise RedditAccessException(RedditAccessException.SERVER_ERROR)
+    except SpecialError:
+      raise RedditAccessException(RedditAccessException.SPAM_PREVENTION)
+    except TooLarge:
+      raise RedditAccessException(RedditAccessException.INCOMING_DATA_TOO_LARGE)
+    except UnavailableForLegalReasons:
+      raise RedditAccessException(RedditAccessException.URL_ILLEGAL)
+
+  def _get_subreddit_generator(self, subreddit, query):
+    return self.client.subreddit(subreddit) \
+      .search(
+        query=RedditQuery.search_in_field(query.keyword, RedditQuery.TITLE),
+        sort=query.sort,
+        syntax=query.syntax,
+        time_filter=query.time_filter
+      )
 
   def subreddit_exists(self, subreddit):
-    return self.query_runner.subreddit_exists(subreddit)
+    exists = False if self._blank_subreddit(subreddit) else True
+    try:
+      self.client.subreddits.search_by_name(subreddit, exact=True)
+    except NotFound:
+      exists = False
+    return exists
+
+  def _blank_subreddit(self, subreddit):
+      return subreddit == ''
+
+
+class RedditPost:
+
+  def __init__(self, title, date, comment_count, link, post_id):
+    self.title = title
+    self.date = date
+    self.comment_count = comment_count
+    self.link = link
+    self.post_id = post_id
 
 
 class RedditQuery(object):
 
-  def __init__(self, keyword, subreddit, before=None, sort='new', syntax='lucene', time_filter='hour'):
-    self.variable_query_params = {}
-    # Variable reddit search params
-    self.variable_query_params['before'] = before
+  TITLE = 'title'
+
+  def __init__(self, keyword, subreddit, before=None, sort='new', syntax='lucene', time_filter='day'):
 
     # Fixed reddit search params
     self.keyword = keyword
@@ -30,37 +117,17 @@ class RedditQuery(object):
     self.sort = sort
     self.syntax = syntax
     self.time_filter= time_filter
-    self.id = str(hash(self))
+    self.id = str(hash(self.keyword + self.subreddit))
     self.total_post_count = 0
     self.state = TaskState.RESUMED
+    self.most_recent_post_date = DateTime.now()
 
-  def to_string(self):
-    return self.__concat_keyword_with_variable_query_params()
-
-  def __concat_keyword_with_variable_query_params(self):
-    variable_params = ''
-    for parameter, value in self.variable_query_params.iteritems():
-      if self.__variable_param_exists(value):
-        variable_params += self.__join_param(parameter, value) # In the form of &parameter=value
-    return self.keyword + variable_params
-
-  def __variable_param_exists(self, value):
-    return value != None
-
-  def __join_param(self, param, value):
-    return '&' + param + '=' + value
-
-  def sort_by(self):
-    return self.sort
-
-  def search_with(self):
-    return self.syntax
-
-  def time_filter_by(self):
-    return self.time_filter
-
-  def get_subreddit(self):
-    return self.subreddit
+  @staticmethod
+  def search_in_field(keyword, field):
+    keyword_by_field = ''
+    for word in keyword.split():
+      keyword_by_field += (field + ':' + word + ' ')
+    return keyword_by_field
 
 
 class RedditQueryListing(object):
@@ -74,38 +141,14 @@ class RedditQueryListing(object):
   def get(self, key):
     return self.listing[key] if key in self.listing else None
 
+  def set(self, key, data):
+    self.listing[key] = data
+
+  def contains(self, key):
+    return key in self.listing
+
   def remove(self, key):
     del self.listing[key]
 
   def size(self):
     return len(self.listing)
-
-
-class RedditQueryRunner:
-
-  def __init__(self, id, agent):
-    self.id = id
-    self.agent = agent
-    self.client = praw.Reddit(client_id=id, client_secret=None, user_agent=agent)
-
-  def search_query(self, query):
-    query_string = query.to_string()
-    subreddit = query.get_subreddit()
-    sort = query.sort_by()
-    syntax = query.search_with()
-    time_filter = query.time_filter_by()
-
-    if self.subreddit_exists(subreddit):
-      return self.client.subreddit(subreddit).search(query_string, sort=sort, syntax=syntax, time_filter=time_filter)
-    return {}
-
-  def subreddit_exists(self, subreddit):
-    exists = False if self.__blank_subreddit(subreddit) else True
-    try:
-      self.client.subreddits.search_by_name(subreddit, exact=True)
-    except NotFound:
-      exists = False
-    return exists
-
-  def __blank_subreddit(self, subreddit):
-      return subreddit == ''

@@ -10,12 +10,13 @@ class TaskScheduler(QObject):
   query_ready = pyqtSignal(str)
   query_available = pyqtSignal(object)
   querylisting_available = pyqtSignal(object)
-  query_result_available = pyqtSignal(object)
+  query_result_available = pyqtSignal(str, object)
 
   def __init__(self, scheduler):
     super(TaskScheduler, self,).__init__()
     self.scheduler = scheduler
     self.tasks = {}
+    self.log = logging.getLogger("scheduler")
     self.setup()
 
   def setup(self):
@@ -49,7 +50,7 @@ class TaskScheduler(QObject):
     elif task.name is TaskName.READ_QUERYLISTING:
       self._with_querylisting(event.retval)
     elif task.name is TaskName.QUERY_REDDIT:
-      self._with_query_result(event.retval)
+      self._with_query_result(id, event.retval)
 
     if task.is_one_off() and task.id in self.tasks:
       self._remove_task_from_tasks(task)
@@ -57,19 +58,29 @@ class TaskScheduler(QObject):
   def pause_task_by_id(self, id):
     if id in self.tasks:
       task = self.tasks[id]
-      task.state = TaskState.PAUSED
       task.scheduled_job.pause()
+      task.state = TaskState.PAUSED
 
   def resume_task_by_id(self, id):
     if id in self.tasks:
       task = self.tasks[id]
-      task.state = TaskState.RESUMED
       task.scheduled_job.resume()
+      task.state = TaskState.RESUMED
 
   def stop_task_by_id(self, id):
     if id in self.tasks:
-      del self.tasks[task.id]
+      task = self.tasks[id]
       task.scheduled_job.remove()
+      del self.tasks[id]
+
+  def update_task_by_id(self, id, function):
+    if id in self.tasks:
+      task = self.tasks[id]
+      task.function_to_run = function
+      task.scheduled_job = task.scheduled_job.modify(func=function)
+
+  def task_count(self):
+    return len(self.tasks)
 
   def _when_user_ready(self):
     self.user_ready.emit()
@@ -83,8 +94,8 @@ class TaskScheduler(QObject):
   def _with_querylisting(self, querylisting):
     self.querylisting_available.emit(querylisting)
 
-  def _with_query_result(self, query_result):
-    self.query_result_available.emit(query_result)
+  def _with_query_result(self, id, query_result):
+    self.query_result_available.emit(id, query_result)
 
 
 class Task:
@@ -130,6 +141,7 @@ class TaskName:
   UPDATE_QUERY = 'Changes made to query'
   DELETE_QUERY = 'Remove query'
   QUERY_REDDIT = 'Search reddit'
+  EMAIL_QUERY_RESULT = 'Sending email of result'
 
 class TaskTrigger:
   INTERVAL = 'interval'

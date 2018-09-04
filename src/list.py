@@ -2,16 +2,17 @@ import sys
 
 sys.path.append('..')
 
-from PyQt5.QtCore import pyqtSignal
+from PyQt5.QtCore import pyqtSignal, Qt
+from PyQt5.QtWidgets import QListWidgetItem
 from widget import Widget
 from scheduler import TaskState
 from inputfile import UiFile
 
 class QueryListingEntry(Widget):
 
-  pause_clicked = pyqtSignal(object)
-  resume_clicked = pyqtSignal(object)
-  stop_clicked = pyqtSignal(object)
+  pause_clicked = pyqtSignal(object, object)
+  resume_clicked = pyqtSignal(object, object)
+  stop_clicked = pyqtSignal(object, object)
 
   def __init__(self, query):
     super(QueryListingEntry, self).__init__(UiFile.QUERYLISTING_ENTRY, self)
@@ -25,7 +26,6 @@ class QueryListingEntry(Widget):
 
   def setup_ui(self):
     self.set_query_values(self.query)
-    self.hide_resume_button()
 
   def set_query_values(self, query):
     self.query = query
@@ -42,16 +42,16 @@ class QueryListingEntry(Widget):
     self.subreddit_label.setText(subreddit)
 
   def set_post_count(self, total_post_count):
-    self.total_post_count = total_post_count
+    self.total_post_count_label.setText(str(total_post_count))
 
   def set_id(self, id):
     self.id = id
 
   def set_state(self, state):
     if state is TaskState.RESUMED:
-      self.hide_pause_button()
-    elif state is TaskState.PAUSED:
       self.hide_resume_button()
+    elif state is TaskState.PAUSED:
+      self.hide_pause_button()
 
   def hide_resume_button(self):
     self.resume_button.hide()
@@ -62,10 +62,22 @@ class QueryListingEntry(Widget):
     self.resume_button.show()
 
   def _pause_clicked(self):
-    self.pause_clicked.emit(self)
+    self.pause_clicked.emit(self, self.query)
 
   def _resume_clicked(self):
-    self.resume_clicked.emit(self)
+    self.resume_clicked.emit(self, self.query)
 
   def _stop_clicked(self):
-    self.stop_clicked.emit(self)
+    self.stop_clicked.emit(self, self.query)
+
+
+class QueryListingItem(QListWidgetItem):
+  def __init__(self, list, query):
+    super(QueryListingItem, self).__init__(list)
+    self.compare_by_query_value(query)
+
+  def compare_by_query_value(self, query):
+    self.setData(Qt.UserRole, query.subreddit)
+
+  def __lt__(self, other):
+    return self.data(Qt.UserRole) < other.data(Qt.UserRole)

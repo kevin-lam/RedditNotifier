@@ -7,10 +7,13 @@ from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot, QSize
 sys.path.append('..')
 
 from widget import Widget
-from scheduler import Task, TaskTrigger, TaskName, TaskState
+from scheduler import Task, TaskTrigger, TaskName, TaskState, Time
 from reddit import RedditQueryListing
 from inputfile import UiFile
-from list import QueryListingEntry
+from list import QueryListingEntry, QueryListingItem
+from electronicmail import RedditEmail
+from user import User
+from date import DateTime
 
 class MainWindow(QtWidgets.QMainWindow, Widget):
 
@@ -41,8 +44,8 @@ class MainWindow(QtWidgets.QMainWindow, Widget):
   def get_query_count(self):
     return int(self.notification_count_label.text())
 
-  def create_list_item(self):
-    return QtWidgets.QListWidgetItem(self.notification_list)
+  def create_list_item(self, query):
+    return QueryListingItem(self.notification_list, query)
 
   def create_entry(self, query):
     return QueryListingEntry(query)
@@ -52,12 +55,11 @@ class MainWindow(QtWidgets.QMainWindow, Widget):
     self.notification_list.addItem(item)
     self.notification_list.setItemWidget(item, entry)
 
-  def update_entry(self, item, query):
-    entry = self.notification_list.itemWidget(item)
-    entry.set_query_values(query)
+  def update_entry(self, item, entry):
+    self.notification_list.setItemWidget(item, entry)
 
-  def remove_entry(self):
-    pass
+  def remove_entry(self, item):
+    self.notification_list.removeItemWidget(item)
 
 class MainWindowPresenter:
 
@@ -74,23 +76,29 @@ class MainWindowPresenter:
     self.main_window_model.get_query_by_id(id)
 
   def with_querylisting(self, querylisting):
-    self._display_and_schedule_querylisting(querylisting)
+    if not self.main_window_model.has_existing_queries():
+      self._display(querylisting)
+      self._query(querylisting)
 
   def with_query(self, query):
     querylisting = RedditQueryListing()
     querylisting.add(query)
-    self._display_and_schedule_querylisting(querylisting)
+    self._display(querylisting)
+    self._query(querylisting)
 
-  def _display_and_schedule_querylisting(self, querylisting):
+  def _display(self, querylisting):
     if self.main_window_model.user_exist():
-      self.main_window_model.schedule_querylisting(querylisting)
       self._create_querylisting_entry(querylisting)
       self.main_window_view.set_query_count(self.main_window_view.get_query_count() + querylisting.size())
       self.main_window_view.enable_query_dialog_button()
 
+  def _query(self, querylisting):
+    if self.main_window_model.user_exist():
+      self.main_window_model.search_reddit(querylisting)
+
   def _create_querylisting_entry(self, querylisting):
     for id, query in querylisting.listing.items():
-      item = self.main_window_view.create_list_item()
+      item = self.main_window_view.create_list_item(query)
       entry = self.main_window_view.create_entry(query)
       self._map_id_to_item(id, item)
       self.setup_entry_signals(item, entry)
@@ -104,47 +112,71 @@ class MainWindowPresenter:
 
   def with_query_result(self, id, query_result):
     query = self.main_window_model.get_query_by_id_immediate(id)
-    query.total_post_count += len(query_result)
-    query.most_recent_post_id = query_result[0].post_id if query_result else None
-    for result in query_result: 
-      self.main_window_model.update_task(id, query)
-      self.main_window_model.update_storage(id, query)
-      self.main_window_view.update_entry(self.id_to_item_map[id], query)
+    print query.keyword
+    print query.subreddit
+    print query.most_recent_post_date
+    for post in query_result:
+      print post.title
+      print post.date
+    query_result = self._trim_result(query, query_result)
+    if query_result:
+      query.total_post_count += len(query_result)
+      self._update_entry(id, query)
+      self.main_window_model.send_email_notification(query, query_result)
 
-  def setup_entry_signals(self, item, entry):
-    entry.pause_clicked.connect(lambda: self.pause_clicked(item))
-    entry.resume_clicked.connect(lambda: self.resume_clicked(item))
-    entry.stop_clicked.connect(lambda: self.stop_clicked(item))
+  def _trim_result(self, query, result):
+    return [post for post in reversed(result) if self._post_is_new(query, post)]
 
-  def pause_clicked(self, item):
-    query.state = TaskState.PAUSED
-    id = query.id
-    self.main_window_model.pause_query(id)
+  def _post_is_new(self, query, post):
+    is_new = post.date > query.most_recent_post_date
+    if is_new:
+      query.most_recent_post_date = post.date
+    return is_new
+
+  def _update_entry(self, id, query):
+    item = self.id_to_item_map[id]
+    item.compare_by_query_value(query)
+    entry = self.main_window_view.create_entry(query)
+    self.setup_entry_signals(item, entry)
+    self.main_window_model.update_query_task(id, query)
     self.main_window_model.update_storage(id, query)
-    self.main_window_view.update_entry(item, query)
+    self.main_window_view.update_entry(item, entry)
 
-  def resume_clicked(self, item):
-    query.state = TaskState.RESUMED
-    id = query.id
-    self.main_window_model.resume_query(id)
-    self.main_window_model.update_storage(id, query)
-    self.main_window_view.update_entry(item, query)
-
-  def stop_clicked(self, item, query):
-    id = query.id
+  def _remove_entry(self, id, query):
+    item = self.id_to_item_map[id]
+    item.compare_by_query_value(query)
     self.main_window_model.stop_query(id)
     self.main_window_model.delete_from_storage(id)
     self.main_window_view.remove_entry(item)
     self._unmap_id_to_item(id)
     self.main_window_view.set_query_count(self.main_window_view.get_query_count() - 1)
 
+  def setup_entry_signals(self, item, entry):
+    entry.pause_clicked.connect(self.pause_clicked)
+    entry.resume_clicked.connect(self.resume_clicked)
+    entry.stop_clicked.connect(self.stop_clicked)
+
+  def pause_clicked(self, entry, query):
+    query.state = TaskState.PAUSED
+    self._update_entry(query.id, query)
+    self.main_window_model.pause_query(query.id)
+
+  def resume_clicked(self, entry, query):
+    query.state = TaskState.RESUMED
+    self._update_entry(query.id, query)
+    self.main_window_model.resume_query(query.id)
+
+  def stop_clicked(self, entry, query):
+    self._remove_entry(query.id, query)
+
 class MainWindowModel:
 
-  def __init__(self, scheduler, user_storage, query_storage, emailer):
+  def __init__(self, scheduler, user_storage, query_storage, emailer, reddit):
     self.scheduler = scheduler
     self.user_storage = user_storage
     self.query_storage = query_storage
     self.emailer = emailer
+    self.reddit = reddit
 
   def user_exist(self):
     return self.user_storage.read_all(default=None) is not None
@@ -157,18 +189,27 @@ class MainWindowModel:
     self.scheduler.schedule_task(Task(lambda: self.query_storage.read_by_key(id), trigger=TaskTrigger.ONE_OFF,
                                       name=TaskName.READ_QUERY))
 
-  def schedule_querylisting(self, querylisting):
+  def get_query_by_id_immediate(self, id):
+    return self.query_storage.read_by_key(id)
+
+  def search_reddit(self, querylisting):
     for id, query in querylisting.listing.items():
       self.scheduler.schedule_task(Task(lambda: self.reddit.query(query), trigger=TaskTrigger.INTERVAL,
-                                        name=TaskName.QUERY_REDDIT, id=query.id, trigger_args={Time.HR: 1}))
+                                        name=TaskName.QUERY_REDDIT, id=query.id, trigger_args={Time.MIN: 1}))
 
   def update_storage(self, id, query):
     self.scheduler.schedule_task(Task(lambda: self.query_storage.update(id, query, RedditQueryListing()),
                                  trigger=TaskTrigger.ONE_OFF, name=TaskName.UPDATE_QUERY))
 
   def delete_from_storage(self, id):
-    self.scheduler.schedule_task(Task(lambda: self.query_storage.delete(id), trigger=TaskTrigger.ONE_OFF,
+    self.scheduler.schedule_task(Task(lambda: self.query_storage.delete(id, RedditQueryListing()), trigger=TaskTrigger.ONE_OFF,
                                  name=TaskName.DELETE_QUERY))
+
+  def update_query_task(self, id, query):
+    self.scheduler.update_task_by_id(id, lambda: self.reddit.query(query))
+
+  def has_existing_queries(self):
+    return self.scheduler.task_count() != 0
 
   def pause_query(self, id):
     self.scheduler.pause_task_by_id(id)
@@ -178,3 +219,10 @@ class MainWindowModel:
 
   def stop_query(self, id):
     self.scheduler.stop_task_by_id(id)
+
+  def send_email_notification(self, query, posts):
+    user = self.user_storage.read_all(User())
+    email = RedditEmail(self.emailer.client.email, user.email)
+    email.create_message(query, posts)
+    self.scheduler.schedule_task(Task(lambda: self.emailer.send(email), trigger=TaskTrigger.ONE_OFF,
+                                      name=TaskName.EMAIL_QUERY_RESULT))

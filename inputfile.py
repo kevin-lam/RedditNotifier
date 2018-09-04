@@ -10,3 +10,8 @@ class StorageFile:
 
 class ConfigFile:
   LOGGING = 'log.conf'
+
+class HtmlFile:
+  EMAIL_DOC_FORMAT = 'html/reddit_email_format.html'
+  REDDIT_POST_FORMAT = 'html/reddit_email_post_format.html'
+  REDDIT_HEADER_FORMAT = 'html/reddit_email_header_format.html'

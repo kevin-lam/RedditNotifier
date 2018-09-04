@@ -1,4 +1,5 @@
 import sys
+import praw
 from logging import config, getLogger
 
 from PyQt5.QtWidgets import QApplication
@@ -29,7 +30,7 @@ def main():
   # Initialize model dependencies
   scheduler = TaskScheduler(QtScheduler(logger=getLogger('scheduler')))
   emailer = EmailSender(EmailClient(HOST, PORT, EMAIL, PASSWORD))
-  reddit = Reddit(ID, AGENT)
+  reddit = Reddit(praw.Reddit(client_id=ID, client_secret=None, user_agent=AGENT))
   user_validator = UserValidator()
   user_retriever = PickleStorageRetriever(StorageFile.USER)
   user_saver = PickleStorageSaver(StorageFile.USER)
@@ -39,7 +40,7 @@ def main():
   query_storage = FileStorage(query_retriever, query_saver)
 
   # Initialize model
-  window_model = MainWindowModel(scheduler, user_storage, query_storage, emailer)
+  window_model = MainWindowModel(scheduler, user_storage, query_storage, emailer, reddit)
   user_dialog_model = UserDialogModel(scheduler, user_storage, user_validator)
   query_dialog_model = QueryDialogModel(scheduler, query_storage, reddit)
 
@@ -57,6 +58,7 @@ def main():
   scheduler.query_ready.connect(window_presenter.when_query_ready)
   scheduler.querylisting_available.connect(window_presenter.with_querylisting)
   scheduler.query_available.connect(window_presenter.with_query)
+  scheduler.query_result_available.connect(window_presenter.with_query_result)
 
   window.show()
   sys.exit(app.exec_())
