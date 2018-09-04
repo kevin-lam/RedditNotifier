@@ -9,6 +9,8 @@ Asynchronous programming & task scheduling - **Apscheduler 3.5.3** (https://apsc
 
 Memory persistence - **Pickle 3.7.0** (https://docs.python.org/3/library/pickle.html)
 
+Email formatting - **BeautifulSoup 4.4.0** (https://www.crummy.com/software/BeautifulSoup/bs4/doc/)
+
 Model-View-Presenter architecture
 
 ## Usage
